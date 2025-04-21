@@ -10,7 +10,7 @@ local nes_ns = vim.api.nvim_create_namespace("copilot-nes")
 ---@param result copilotlsp.copilotInlineEditResponse
 local function handle_nes_response(err, result)
     if err then
-        vim.notify(err.message)
+        -- vim.notify(err.message)
         return
     end
     for _, edit in ipairs(result.edits) do
@@ -31,25 +31,36 @@ function M.request_nes(copilot_lss)
 end
 
 ---@param bufnr? integer
----@param opts? nes.Apply.Opts
----@param client vim.lsp.Client
-function M.apply_pending_nes(bufnr, opts, client)
-    opts = opts or {}
-
+---@return boolean
+function M.apply_pending_nes(bufnr)
     bufnr = bufnr and bufnr > 0 and bufnr or vim.api.nvim_get_current_buf()
 
     ---@type copilotlsp.InlineEdit
     local state = vim.b[bufnr].nes_state
     if not state then
-        return
+        return false
     end
-    utils.apply_inline_edit(state)
-    nes_ui.clear_suggestion(bufnr, nes_ns)
-    if opts.trigger then
-        vim.schedule(function()
-            M.request_nes(client)
-        end)
-    end
+    vim.schedule(function()
+        local prev_mode = vim.api.nvim_get_mode().mode
+        if prev_mode == "i" then
+            vim.cmd("stopinsert!")
+        end
+        ---@type lsp.Location
+        local jump_loc = {
+            uri = state.textDocument.uri,
+            range = {
+                start = state.range["end"],
+                ["end"] = state.range["end"],
+            },
+        }
+        vim.lsp.util.show_document(jump_loc, "utf-16", { focus = true })
+        utils.apply_inline_edit(state)
+        nes_ui.clear_suggestion(bufnr, nes_ns)
+        if prev_mode == "i" then
+            vim.cmd("startinsert")
+        end
+    end)
+    return true
 end
 
 return M
