@@ -20,6 +20,7 @@ local function handle_nes_response(err, result)
     nes_ui._display_next_suggestion(result.edits, nes_ns)
 end
 
+--- Requests the NextEditSuggestion from the current cursor position
 ---@param copilot_lss vim.lsp.Client?
 function M.request_nes(copilot_lss)
     local pos_params = vim.lsp.util.make_position_params(0, "utf-16")
@@ -30,8 +31,68 @@ function M.request_nes(copilot_lss)
     copilot_lss:request("textDocument/copilotInlineEdit", pos_params, handle_nes_response)
 end
 
+--- Walks the cursor to the start of the edit.
+--- This function returns false if there is no edit to apply or if the cursor is already at the start position of the
+--- edit.
 ---@param bufnr? integer
----@return boolean
+---@return boolean --if the cursor walked
+function M.walk_cursor_start_edit(bufnr)
+    bufnr = bufnr and bufnr > 0 and bufnr or vim.api.nvim_get_current_buf()
+    ---@type copilotlsp.InlineEdit
+    local state = vim.b[bufnr].nes_state
+    if not state then
+        return false
+    end
+
+    local cursor_row, _ = unpack(vim.api.nvim_win_get_cursor(0))
+    if cursor_row - 1 ~= state.range.start.line then
+        vim.b[bufnr].nes_jump = true
+        ---@type lsp.Location
+        local jump_loc_before = {
+            uri = state.textDocument.uri,
+            range = {
+                start = state.range["start"],
+                ["end"] = state.range["start"],
+            },
+        }
+        return vim.lsp.util.show_document(jump_loc_before, "utf-16", { focus = true })
+    else
+        return false
+    end
+end
+
+--- Walks the cursor to the end of the edit.
+--- This function returns false if there is no edit to apply or if the cursor is already at the end position of the
+--- edit
+---@param bufnr? integer
+---@return boolean --if the cursor walked
+function M.walk_cursor_end_edit(bufnr)
+    bufnr = bufnr and bufnr > 0 and bufnr or vim.api.nvim_get_current_buf()
+    ---@type copilotlsp.InlineEdit
+    local state = vim.b[bufnr].nes_state
+    if not state then
+        return false
+    end
+
+    ---@type lsp.Location
+    local jump_loc_after = {
+        uri = state.textDocument.uri,
+        range = {
+            start = state.range["end"],
+            ["end"] = state.range["end"],
+        },
+    }
+    --NOTE: If last line is deletion, then this may be outside of the buffer
+    vim.schedule(function()
+        pcall(vim.lsp.util.show_document, jump_loc_after, "utf-16", { focus = true })
+    end)
+    return true
+end
+
+--- This function applies the pending nes edit to the current buffer and then clears the marks for the pending
+--- suggestion
+---@param bufnr? integer
+---@return boolean --if the nes was applied
 function M.apply_pending_nes(bufnr)
     bufnr = bufnr and bufnr > 0 and bufnr or vim.api.nvim_get_current_buf()
 
@@ -41,24 +102,9 @@ function M.apply_pending_nes(bufnr)
         return false
     end
     vim.schedule(function()
-        local prev_mode = vim.api.nvim_get_mode().mode
-        if prev_mode == "i" then
-            vim.cmd("stopinsert!")
-        end
-        ---@type lsp.Location
-        local jump_loc = {
-            uri = state.textDocument.uri,
-            range = {
-                start = state.range["end"],
-                ["end"] = state.range["end"],
-            },
-        }
-        vim.lsp.util.show_document(jump_loc, "utf-16", { focus = true })
         utils.apply_inline_edit(state)
+        vim.b[bufnr].nes_jump = false
         nes_ui.clear_suggestion(bufnr, nes_ns)
-        if prev_mode == "i" then
-            vim.cmd("startinsert")
-        end
     end)
     return true
 end
