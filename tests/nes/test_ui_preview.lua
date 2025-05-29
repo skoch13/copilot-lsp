@@ -258,4 +258,97 @@ do
     end
 end
 
+T["ui_preview"]["cursor_aware_suggestion_clearing"] = function()
+    set_content("line1\nline2\nline3\nline4\nline5\nline6\nline7\nline8")
+    ref(child.get_screenshot())
+
+    -- Create a suggestion at line 3
+    local edit = {
+        range = {
+            start = { line = 2, character = 0 },
+            ["end"] = { line = 2, character = 0 },
+        },
+        newText = "suggested text ",
+    }
+
+    -- Display suggestion
+    child.g.test_edit = edit
+    child.lua_func(function()
+        local ns_id = vim.api.nvim_create_namespace("nes_test")
+        local edits = { vim.g.test_edit }
+        require("copilot-lsp.nes.ui")._display_next_suggestion(0, ns_id, edits)
+    end)
+    ref(child.get_screenshot())
+
+    -- Test 1: Moving cursor nearby shouldn't clear the suggestion (within counter threshold)
+    child.cmd("normal! gg") -- Move to first line (counter: 1 -> 2)
+    child.cmd("normal! j") -- Move to line 2 (counter: 2 -> 3)
+    child.lua_func(function()
+        vim.uv.sleep(500) -- Give time for autocmd to process
+    end)
+
+    -- Verify suggestion still exists (should be at threshold but not exceeded)
+    local suggestion_exists = child.lua_func(function()
+        return vim.b[0].nes_state ~= nil
+    end)
+    eq(suggestion_exists, true)
+    ref(child.get_screenshot())
+
+    -- Test 2: One more move should clear the suggestion (exceeds counter threshold)
+    child.cmd("normal! j")
+    child.cmd("normal! j")
+    child.cmd("normal! j")
+    child.cmd("normal! j")
+    child.cmd("normal! j")
+    child.lua_func(function()
+        vim.uv.sleep(500) -- Give time for autocmd to process
+    end)
+
+    -- Verify suggestion is cleared
+    local suggestion_cleared = child.lua_func(function()
+        return vim.b[0].nes_state == nil
+    end)
+    eq(suggestion_cleared, true)
+    ref(child.get_screenshot())
+end
+
+T["ui_preview"]["suggestion_preserves_on_movement_towards"] = function()
+    set_content("line1\nline2\nline3\nline4\nline5\nline6\nline7\nline8")
+    ref(child.get_screenshot())
+
+    -- Position cursor at line 8
+    child.cmd("normal! gg7j")
+
+    -- Create a suggestion at line 3
+    local edit = {
+        range = {
+            start = { line = 2, character = 0 },
+            ["end"] = { line = 2, character = 0 },
+        },
+        newText = "suggested text ",
+    }
+
+    -- Display suggestion
+    child.g.test_edit = edit
+    child.lua_func(function()
+        local ns_id = vim.api.nvim_create_namespace("nes_test")
+        local edits = { vim.g.test_edit }
+        require("copilot-lsp.nes.ui")._display_next_suggestion(0, ns_id, edits)
+    end)
+    ref(child.get_screenshot())
+
+    -- Test: Moving cursor towards the suggestion (even outside buffer zone) shouldn't clear it
+    child.cmd("normal! 4k") -- Move to line 4, moving towards the suggestion
+    child.lua_func(function()
+        vim.uv.sleep(500)
+    end)
+
+    -- Verify suggestion still exists
+    local suggestion_exists = child.lua_func(function()
+        return vim.b[0].nes_state ~= nil
+    end)
+    eq(suggestion_exists, true)
+    ref(child.get_screenshot())
+end
+
 return T

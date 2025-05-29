@@ -39,6 +39,36 @@ return {
 }
 ```
 
+
+#### Clearing suggestions with Escape
+
+You can map the `<Esc>` key to clear suggestions while preserving its other functionality:
+
+```lua
+-- Clear copilot suggestion with Esc if visible, otherwise preserve default Esc behavior
+vim.keymap.set("n", "<esc>", function()
+    if not require('copilot-lsp.nes').clear() then
+        -- fallback to other functionality
+    end
+end, { desc = "Clear Copilot suggestion or fallback" })
+```
+
+## Default Configuration
+
+
+### NES (Next Edit Suggestion) Smart Clearing
+You don’t need to configure anything, but you can customize the defaults:
+`move_count_threshold` is the most important. It controls how many cursor moves happen before suggestions are cleared. Higher = slower to clear.
+
+```lua
+require('copilot-lsp').setup({
+  nes = {
+    move_count_threshold = 3,   -- Clear after 3 cursor movements
+  }
+})
+```
+
+
 ### Blink Integration
 
 ```lua
