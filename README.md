@@ -28,17 +28,22 @@ return {
         vim.g.copilot_nes_debounce = 500
         vim.lsp.enable("copilot_ls")
         vim.keymap.set("n", "<tab>", function()
-            -- Try to jump to the start of the suggestion edit.
-            -- If already at the start, then apply the pending suggestion and jump to the end of the edit.
-            local _ = require("copilot-lsp.nes").walk_cursor_start_edit()
-                or (
-                    require("copilot-lsp.nes").apply_pending_nes() and require("copilot-lsp.nes").walk_cursor_end_edit()
-                )
-        end)
+        local bufnr = vim.api.nvim_get_current_buf()
+        local state = vim.b[bufnr].nes_state
+        if state then
+        -- Try to jump to the start of the suggestion edit.
+        -- If already at the start, then apply the pending suggestion and jump to the end of the edit.
+          local _ = require("copilot-lsp.nes").walk_cursor_start_edit()
+            or (require("copilot-lsp.nes").apply_pending_nes() and require("copilot-lsp.nes").walk_cursor_end_edit())
+          return nil
+        else
+        -- Resolving the terminal's inability to distinguish between `TAB` and `<C-i>` in normal mode
+          return "<C-i>"
+        end
+      end, { desc = "Accept Copilot NES suggestion", expr = true })
     end,
 }
 ```
-
 
 #### Clearing suggestions with Escape
 
@@ -55,8 +60,8 @@ end, { desc = "Clear Copilot suggestion or fallback" })
 
 ## Default Configuration
 
-
 ### NES (Next Edit Suggestion) Smart Clearing
+
 You don’t need to configure anything, but you can customize the defaults:
 `move_count_threshold` is the most important. It controls how many cursor moves happen before suggestions are cleared. Higher = slower to clear.
 
@@ -67,7 +72,6 @@ require('copilot-lsp').setup({
   }
 })
 ```
-
 
 ### Blink Integration
 
@@ -99,22 +103,6 @@ return {
 
 It can also be combined with [fang2hou/blink-copilot](https://github.com/fang2hou/blink-copilot) to get inline completions.
 Just add the completion source to your Blink configuration and it will integrate
-
-### Resolving the terminal's inability to distinguish between `TAB` and `<C-i>` in normal mode
-
-```lua
-      vim.keymap.set('n', '<tab>', function()
-        local bufnr = vim.api.nvim_get_current_buf()
-        local state = vim.b[bufnr].nes_state
-        if state then
-          local _ = require('copilot-lsp.nes').walk_cursor_start_edit()
-            or (require('copilot-lsp.nes').apply_pending_nes() and require('copilot-lsp.nes').walk_cursor_end_edit())
-          return nil
-        else
-          return '<C-i>'
-        end
-      end, { desc = 'Accept Copilot NES suggestion', expr = true })
-```
 
 # Requirements
 
